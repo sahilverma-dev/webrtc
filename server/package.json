@@ -1,0 +1,50 @@
+{
+  "name": "youtube-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon ./src/index.ts",
+    "build": "npm i && tsc",
+    "start": "node ./dist/index.js",
+    "lint": "eslint .",
+    "lint-fix": "eslint . --fix",
+    "format": "prettier --write ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/cookie-parser": "^1.4.6",
+    "@types/cors": "^2.8.16",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/mongoose-aggregate-paginate-v2": "^1.0.12",
+    "@types/multer": "^1.4.10",
+    "@types/node": "^20.9.0",
+    "@types/ws": "^8.5.9",
+    "nodemon": "^3.0.1",
+    "prettier": "^3.1.0",
+    "ts-node": "^10.9.1",
+    "tsc": "^2.0.4",
+    "typescipt": "^1.0.0",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cloudinary": "^1.41.0",
+    "colors": "^1.4.0",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "i": "^0.3.7",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.0",
+    "mongoose-aggregate-paginate-v2": "^1.0.6",
+    "multer": "^1.4.5-lts.1",
+    "socket.io": "^4.7.2",
+    "ws": "^8.14.2"
+  }
+}
