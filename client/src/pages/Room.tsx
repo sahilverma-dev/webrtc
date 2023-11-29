@@ -19,14 +19,12 @@ const getRandomUser = () => {
 const user = getRandomUser();
 
 const Room = () => {
+  const [peerConnected, setPeerConnected] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(
     null
   );
-  const [remoteMediaStream, setRemoteMediaStream] =
-    useState<MediaStream | null>(null);
-
   const { roomId } = useParams<{ roomId: string }>();
   const { socket } = useSocket();
   const {
@@ -136,8 +134,9 @@ const Room = () => {
     peer.ontrack = (tracks) => {
       console.log("got the tracks", tracks);
       const stream = tracks.streams[0];
-      if (remoteVideoRef?.current) remoteVideoRef.current.srcObject = stream;
-      setRemoteMediaStream(stream);
+      if (remoteVideoRef?.current) {
+        remoteVideoRef.current.srcObject = stream;
+      }
     };
 
     peer.onicecandidate = (event) => {
@@ -153,12 +152,15 @@ const Room = () => {
 
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === "connected") {
-        console.log("Peers connected!");
-        console.log(localMediaStream);
-
-        if (localMediaStream) sendStream(localMediaStream);
-        else console.log("no media");
+        console.log("Peers connected!", localMediaStream);
       }
+    };
+
+    dataChannel.onopen = () => {
+      console.log("fuck it data channel is open now ");
+      setPeerConnected(true);
+      if (localMediaStream) sendStream(localMediaStream);
+      else console.log("no media");
     };
 
     return () => {
@@ -168,6 +170,7 @@ const Room = () => {
       socket?.off("ice-candidate", handleICECandidates);
     };
   }, [
+    dataChannel,
     handleAnswer,
     handleICECandidates,
     handleJoin,
@@ -191,12 +194,12 @@ const Room = () => {
           </Avatar>
         </div>
       </div>
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-2">
         <motion.div
           variants={container}
           initial="hidden"
           animate="visible"
-          className="w-full grid gap-4 xl:grid-cols-3"
+          className="w-full grid gap-4 grid-cols-2 md:grid-cols-3"
         >
           <motion.div
             layout
@@ -211,8 +214,7 @@ const Room = () => {
               className=" w-full h-full object-cover"
             />
           </motion.div>
-
-          {remoteMediaStream && (
+          {peerConnected && (
             <motion.div
               layout
               variants={item}
@@ -227,8 +229,7 @@ const Room = () => {
             </motion.div>
           )}
         </motion.div>
-        <div className="flex gap-4">
-          <Button>Send Stream</Button>
+        <div className="flex gap-2">
           <Button
             onClick={() => {
               dataChannel.send("hello");

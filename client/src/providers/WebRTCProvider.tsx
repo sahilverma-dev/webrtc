@@ -9,6 +9,7 @@ export const WebRTCContext = createContext<{
   setRemoteAnswer: (offer: RTCSessionDescription) => Promise<void>;
   sendStream: (stream: MediaStream) => void;
   dataChannel: RTCDataChannel;
+  resetPeerConnection: () => void
 } | null>(null);
 
 export const WebRTCProvider = (props: PropsWithChildren) => {
@@ -70,15 +71,35 @@ export const WebRTCProvider = (props: PropsWithChildren) => {
     await peer.setRemoteDescription(ans);
   };
 
-  const sendStream = (stream: MediaStream) => {
-    console.log("sending stream");
 
-    const tracks = stream?.getTracks();
 
-    for (const track of tracks) {
+ const sendStream = (stream: MediaStream) => {
+  console.log("sending stream");
+
+  const tracks = stream.getTracks();
+
+  for (const track of tracks) {
+    console.log("Checking track:", track);
+    const sender = peer.getSenders().find((s) => s.track === track);
+    if (!sender) {
+      console.log("Adding track:", track);
       peer.addTrack(track, stream);
+    } else {
+      console.log("Track already added:", track);
     }
+  }
+};
+
+
+  const resetPeerConnection = () => {
+    // Reset existing sender state
+    peer.getSenders().forEach((sender) => {
+      peer.removeTrack(sender);
+    });
+  
+    // Add new tracks or perform other initialization
   };
+  
 
   return (
     <WebRTCContext.Provider
@@ -89,6 +110,7 @@ export const WebRTCProvider = (props: PropsWithChildren) => {
         setRemoteAnswer,
         sendStream,
         dataChannel,
+        resetPeerConnection
       }}
     >
       {props.children}
