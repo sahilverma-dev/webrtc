@@ -1,14 +1,12 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useSocket, useWebRTC } from "@/hooks";
-import { faker } from "@faker-js/faker";
-import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
-
-import { motion } from "framer-motion";
-import { container, item } from "@/constants/variants";
-import { User } from "@/interfaces";
 import { Button } from "@/components/ui/button";
-
+import { useSocket, useWebRTC } from "@/hooks";
+import { motion } from "framer-motion";
+import { User } from "@/interfaces";
+import { faker } from "@faker-js/faker";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
+import { container, item } from "@/constants/variants";
 const getRandomUser = () => {
   return {
     id: crypto.randomUUID(),
@@ -28,68 +26,89 @@ const Room = () => {
   );
   const [remoteMediaStream, setRemoteMediaStream] =
     useState<MediaStream | null>(null);
-  const { roomId } = useParams<{ roomId: string }>();
 
+  const { roomId } = useParams<{ roomId: string }>();
+  const { socket } = useSocket();
   const {
+    peer,
     createOffer,
     createAnswer,
     setRemoteAnswer,
-    sendStream,
-    peer,
     dataChannel,
+    sendStream,
   } = useWebRTC();
-  // const [users] = useState<{ socketId: string; user: User }[]>([]);
-
-  const { socket } = useSocket();
-
-  const handleJoin = async ({ user }: { user: User }) => {
-    console.log(`${user.name} joined`);
-
-    const offer = await createOffer();
-    console.log(`creating offer for ${user.name}`);
-    socket?.emit("offer", { roomId, offer, user });
-  };
-
-  const handleOffer = async ({
-    user,
-    offer,
-  }: {
-    user: User;
-    offer: RTCSessionDescription;
-  }) => {
-    console.log(`creating answer for ${user.name}`);
-    const answer = await createAnswer(offer);
-    socket?.emit("answer", { roomId, answer, user });
-  };
-
-  const handleAnswer = async (data: {
-    user: User;
-    answer: RTCSessionDescription;
-  }) => {
-    console.log(data);
-    const { answer } = data;
-    await setRemoteAnswer(answer);
-  };
 
   useEffect(() => {
     return () => {
-      socket?.emit("join", {
-        user,
-        roomId,
-      });
+      socket?.emit("join", { roomId, user });
     };
   }, []);
 
-  useEffect(() => {
-    socket?.on("join", handleJoin);
-    socket?.on("offer", handleOffer);
-    socket?.on("answer", handleAnswer);
-    return () => {
-      socket?.off("join", handleJoin);
-      socket?.off("offer", handleOffer);
-      socket?.off("answer", handleAnswer);
-    };
-  });
+  const handleJoin = useCallback(
+    async ({ user: otherUser }: { user: User }) => {
+      const offer = await createOffer();
+      console.log(`offer created for ${otherUser.name}`, offer);
+
+      socket?.emit("offer", {
+        offer,
+        userTo: otherUser,
+        userBy: user,
+        roomId,
+      });
+    },
+    [createOffer, roomId, socket]
+  );
+
+  const handleOffer = useCallback(
+    async ({
+      userBy: otherUser,
+      offer,
+    }: {
+      userBy: User;
+      offer: RTCSessionDescription;
+    }) => {
+      console.log(`got the offer from ${otherUser.name}`, offer);
+
+      const answer = await createAnswer(offer);
+      console.log(`created answer for ${otherUser.name}`, answer);
+      socket?.emit("answer", {
+        answer,
+        userTo: otherUser,
+        userBy: user,
+        roomId,
+      });
+    },
+    [createAnswer, roomId, socket]
+  );
+  const handleAnswer = useCallback(
+    async ({
+      answer,
+      userBy,
+    }: {
+      userBy: User;
+      answer: RTCSessionDescription;
+    }) => {
+      console.log(`got the answer from ${userBy.name}`, answer);
+
+      setRemoteAnswer(answer);
+    },
+    [setRemoteAnswer]
+  );
+
+  const handleICECandidates = useCallback(
+    async ({
+      candidate,
+      userBy,
+    }: {
+      userBy: User;
+      candidate: RTCIceCandidate;
+    }) => {
+      console.log(`got the ice candidate from ${userBy.name}`);
+
+      peer.addIceCandidate(candidate);
+    },
+    [peer]
+  );
 
   useEffect(() => {
     (async () => {
@@ -99,9 +118,9 @@ const Room = () => {
           video: true,
         });
 
+        setLocalMediaStream(media);
         if (localVideoRef.current && media) {
           localVideoRef.current.srcObject = media;
-          setLocalMediaStream(media);
         }
       } catch (error) {
         console.log(error);
@@ -109,31 +128,59 @@ const Room = () => {
     })();
   }, []);
 
-  const handleTracks = (e: RTCTrackEvent) => {
-    const streams = e.streams;
-    console.log(streams);
-
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = streams[0];
-    }
-    setRemoteMediaStream(streams[0]);
-  };
-
   useEffect(() => {
-    peer.addEventListener("track", handleTracks);
-
-    // peer.onicecandidate = () => {
-    //   const { localDescription, remoteDescription } = peer;
-    //   socket?.emit("offer", { roomId, offer: remoteDescription, user });
-    //   socket?.emit("answer", { roomId, answer: localDescription, user });
-    // };
-    return () => {
-      peer.removeEventListener("track", handleTracks);
+    socket?.on("join", handleJoin);
+    socket?.on("offer", handleOffer);
+    socket?.on("answer", handleAnswer);
+    socket?.on("ice-candidate", handleICECandidates);
+    peer.ontrack = (tracks) => {
+      console.log("got the tracks", tracks);
+      const stream = tracks.streams[0];
+      if (remoteVideoRef?.current) remoteVideoRef.current.srcObject = stream;
+      setRemoteMediaStream(stream);
     };
-  }, []);
+
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        // Send the ICE candidate to the other peer
+        socket?.emit("ice-candidate", {
+          userBy: user,
+          candidate: event.candidate,
+          roomId,
+        });
+      }
+    };
+
+    peer.onconnectionstatechange = () => {
+      if (peer.connectionState === "connected") {
+        console.log("Peers connected!");
+        console.log(localMediaStream);
+
+        if (localMediaStream) sendStream(localMediaStream);
+        else console.log("no media");
+      }
+    };
+
+    return () => {
+      socket?.off("join", handleJoin);
+      socket?.off("offer", handleOffer);
+      socket?.off("answer", handleAnswer);
+      socket?.off("ice-candidate", handleICECandidates);
+    };
+  }, [
+    handleAnswer,
+    handleICECandidates,
+    handleJoin,
+    handleOffer,
+    localMediaStream,
+    peer,
+    roomId,
+    sendStream,
+    socket,
+  ]);
 
   return (
-    <div className="w-full">
+    <div className="">
       <div className="flex border-b p-4 w-full items-center justify-between">
         <h1 className="font-bold">Room</h1>
         <div className="flex items-center gap-2">
@@ -179,39 +226,15 @@ const Room = () => {
               />
             </motion.div>
           )}
-
-          {/* {users.map((user) => (
-          <motion.div
-            layout
-            variants={item}
-            layoutId={user.socketId}
-            key={user.socketId}
-            className="w-full flex items-center gap-4 flex-col h-full p-4 border rounded-lg"
-          >
-            <Avatar className="border">
-              <AvatarImage src={user?.user?.image} />
-              <AvatarFallback>
-                {user?.user?.name.split(" ").join("")}
-              </AvatarFallback>
-            </Avatar>
-            <h3 className="font-bold truncate">{user?.user?.name}</h3>
-          </motion.div>
-        ))} */}
         </motion.div>
-        <div className="flex gap-4 items-center">
-          <Button
-            onClick={() => {
-              sendStream(localMediaStream as MediaStream);
-            }}
-          >
-            Send Track
-          </Button>
+        <div className="flex gap-4">
+          <Button>Send Stream</Button>
           <Button
             onClick={() => {
               dataChannel.send("hello");
             }}
           >
-            Send Track
+            Send Message
           </Button>
         </div>
       </div>

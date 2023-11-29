@@ -2,15 +2,7 @@ import "colors";
 import { createServer } from "http";
 import express from "express";
 import { Server } from "socket.io";
-import {
-  ClientToServerEvents,
-  InterServerEvents,
-  RoomMap,
-  ServerToClientEvents,
-  SocketData,
-  User,
-  UserMap,
-} from "./interfaces";
+import { RoomMap, UserMap } from "./interfaces";
 
 const app = express();
 
@@ -18,12 +10,7 @@ const PORT = 5000;
 
 const server = createServer(app);
 
-const io = new Server<
-  ServerToClientEvents,
-  ClientToServerEvents,
-  InterServerEvents,
-  SocketData
->(server, {
+const io = new Server(server, {
   cors: {
     origin: "*",
   },
@@ -34,51 +21,35 @@ const users: UserMap = new Map();
 const userIdToSocketId: Map<string, string> = new Map();
 
 io.on("connection", (socket) => {
-  console.log(`socket ${socket.id} connected`.green);
+  console.log("a user connected");
 
-  function handleLeave(user: User) {
-    socket.broadcast.emit("leave", { socketId: socket.id, user });
-    users.delete(socket.id);
-    socket.disconnect();
-    console.log(`socket ${socket.id} disconnected`.red);
-    socket.emit("allUsers", { users });
-  }
+  // Handle WebRTC signaling
+  socket.on("offer", ({ offer, roomId, userBy, userTo }) => {
+    console.log(
+      `got offer from ${userBy.name} to ${userTo.name} and room ${roomId}`
+    );
+    socket.to(roomId).emit("offer", { offer, userBy });
+  });
 
-  socket.on("allUsers", (data) => {
-    console.log(users);
-    io.to(data.roomId).emit("allUsers", { users });
+  socket.on("answer", ({ answer, roomId, userBy, userTo }) => {
+    console.log(
+      `got answer from ${userBy.name} to ${userTo.name} and room ${roomId}`
+    );
+    socket.to(roomId).emit("answer", { answer, userBy });
+  });
+
+  socket.on("ice-candidate", ({ candidate, roomId, userBy }) => {
+    socket.to(roomId).emit("ice-candidate", { candidate, userBy });
   });
 
   socket.on("join", ({ roomId, user }) => {
     socket.join(roomId);
-    socket.broadcast.emit("join", { socketId: socket.id, user });
-    console.log(`user ${user?.name} joined on ${roomId}`.green);
-    users.set(socket.id, user);
-    userIdToSocketId.set(user.id, socket.id);
-
-    const usersInRoom = rooms.get(roomId) || [];
-    usersInRoom?.push(user);
-
-    rooms.set(roomId, usersInRoom);
-    socket.emit("allUsers", { users });
-  });
-
-  socket.on("offer", ({ user, offer }) => {
-    socket.broadcast.emit("offer", { offer, user });
-  });
-
-  socket.on("answer", ({ user, answer }) => {
-    socket.broadcast.emit("answer", { user, answer });
-  });
-
-  socket.on("leave", ({ roomId, user }) => {
-    socket.leave(roomId);
-    if (user) handleLeave(user);
+    socket.to(roomId).emit("join", { roomId, user });
+    console.log(`${user?.name} joined room: ${roomId}`);
   });
 
   socket.on("disconnect", () => {
-    const user = users.get(socket.id);
-    if (user) handleLeave(user);
+    console.log("user disconnected");
   });
 });
 
