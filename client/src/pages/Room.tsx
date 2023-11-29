@@ -1,12 +1,13 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useSocket } from "@/hooks";
+import { useSocket, useWebRTC } from "@/hooks";
 import { faker } from "@faker-js/faker";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { motion } from "framer-motion";
 import { container, item } from "@/constants/variants";
-import { User, UserMap } from "@/interfaces";
+import { User } from "@/interfaces";
+import { Button } from "@/components/ui/button";
 
 const getRandomUser = () => {
   return {
@@ -20,46 +21,118 @@ const getRandomUser = () => {
 const user = getRandomUser();
 
 const Room = () => {
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(
+    null
+  );
+  const [remoteMediaStream, setRemoteMediaStream] =
+    useState<MediaStream | null>(null);
   const { roomId } = useParams<{ roomId: string }>();
 
-  const [users, setUsers] = useState<{ socketId: string; user: User }[]>([]);
+  const {
+    createOffer,
+    createAnswer,
+    setRemoteAnswer,
+    sendStream,
+    peer,
+    dataChannel,
+  } = useWebRTC();
+  // const [users] = useState<{ socketId: string; user: User }[]>([]);
 
   const { socket } = useSocket();
 
-  const handleLeave = () => {
-    console.log("user left");
+  const handleJoin = async ({ user }: { user: User }) => {
+    
+    console.log(`${user.name} joined`);
+
+    const offer = await createOffer();
+    console.log(`creating offer for ${user.name}`);
+    socket?.emit("offer", { roomId, offer, user });
+  };
+
+  const handleOffer = async ({
+    user,
+    offer,
+  }: {
+    user: User;
+    offer: RTCSessionDescription;
+  }) => {
+    console.log(`creating answer for ${user.name}`);
+    const answer = await createAnswer(offer);
+    socket?.emit("answer", { roomId, answer, user });
+  };
+
+  const handleAnswer = async (data: {
+    user: User;
+    answer: RTCSessionDescription;
+  }) => {
+    console.log(data);
+    const { answer } = data;
+    await setRemoteAnswer(answer);
   };
 
   useEffect(() => {
     return () => {
-      socket?.emit("join", { roomId, user });
-      socket?.on("allUsers", (data) => {
-        console.log(data?.users);
-
-        // setUsers(
-        //   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        //   // @ts-ignore
-        //   users.forEach((item, key) => ({
-        //     socketId: key,
-        //     ...item,
-        //   }))
-        // );
+      socket?.emit("join", {
+        user,
+        roomId,
       });
-      socket?.on("leave", () => {
-        // setUsers((state) => state.filter((i) => i.socketId !== socketId));
-      });
-
-      window.onclose = () => {
-        console.log("close");
-        handleLeave();
-      };
-
-      window.onclose = () => {
-        console.log("close");
-        handleLeave();
-      };
     };
   }, []);
+
+  useEffect(() => {
+    socket?.on("join", handleJoin);
+    socket?.on("offer", handleOffer);
+    socket?.on("answer", handleAnswer);
+    return () => {
+      socket?.off("join", handleJoin);
+      socket?.off("offer", handleOffer);
+      socket?.off("answer", handleAnswer);
+    };
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const media = await navigator.mediaDevices.getUserMedia({
+          // audio: true,
+          video: true,
+        });
+
+        if (localVideoRef.current && media) {
+          localVideoRef.current.srcObject = media;
+          setLocalMediaStream(media);
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    })();
+  }, []);
+
+  const handleTracks = (e: RTCTrackEvent) => {
+    const streams = e.streams;
+    console.log(streams);
+
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = streams[0];
+    }
+    setRemoteMediaStream(streams[0]);
+  };
+
+  useEffect(() => {
+    peer.addEventListener("track", handleTracks);
+
+    // peer.onicecandidate = () => {
+    //   const { localDescription, remoteDescription } = peer;
+    //   socket?.emit("offer", { roomId, offer: remoteDescription, user });
+    //   socket?.emit("answer", { roomId, answer: localDescription, user });
+    // };
+    return () => {
+      peer.removeEventListener("track", handleTracks);
+    };
+  }, []);
+
   return (
     <div className="w-full">
       <div className="flex border-b p-4 w-full items-center justify-between">
@@ -72,13 +145,43 @@ const Room = () => {
           </Avatar>
         </div>
       </div>
-      <motion.div
-        variants={container}
-        initial="hidden"
-        animate="visible"
-        className="w-full p-4 grid gap-4 xl:grid-cols-6"
-      >
-        {users.map((user) => (
+      <div className="p-4 space-y-4">
+        <motion.div
+          variants={container}
+          initial="hidden"
+          animate="visible"
+          className="w-full grid gap-4 xl:grid-cols-3"
+        >
+          <motion.div
+            layout
+            variants={item}
+            className="w-full flex items-center gap-4 flex-col h-full border rounded-lg aspect-video overflow-hidden"
+          >
+            <video
+              ref={localVideoRef}
+              controls={false}
+              autoPlay
+              muted
+              className=" w-full h-full object-cover"
+            />
+          </motion.div>
+
+          {remoteMediaStream && (
+            <motion.div
+              layout
+              variants={item}
+              className="w-full flex items-center gap-4 flex-col h-full border rounded-lg aspect-video overflow-hidden"
+            >
+              <video
+                ref={remoteVideoRef}
+                controls={false}
+                autoPlay
+                className=" w-full h-full object-cover"
+              />
+            </motion.div>
+          )}
+
+          {/* {users.map((user) => (
           <motion.div
             layout
             variants={item}
@@ -94,8 +197,25 @@ const Room = () => {
             </Avatar>
             <h3 className="font-bold truncate">{user?.user?.name}</h3>
           </motion.div>
-        ))}
-      </motion.div>
+        ))} */}
+        </motion.div>
+        <div className="flex gap-4 items-center">
+          <Button
+            onClick={() => {
+              sendStream(localMediaStream as MediaStream);
+            }}
+          >
+            Send Track
+          </Button>
+          <Button
+            onClick={() => {
+              dataChannel.send("hello");
+            }}
+          >
+            Send Track
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

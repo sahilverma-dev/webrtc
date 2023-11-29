@@ -7,6 +7,8 @@ export interface User {
   image: string;
 }
 
+export type RoomMap = Map<string, User[]>;
+
 export interface ClientToServerEvents {
   leave: (data: { socketId: string; user: User }) => void;
   join: (data: { socketId: string; user: User }) => void;

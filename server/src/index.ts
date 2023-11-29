@@ -5,6 +5,7 @@ import { Server } from "socket.io";
 import {
   ClientToServerEvents,
   InterServerEvents,
+  RoomMap,
   ServerToClientEvents,
   SocketData,
   User,
@@ -28,7 +29,9 @@ const io = new Server<
   },
 });
 
+const rooms: RoomMap = new Map();
 const users: UserMap = new Map();
+const userIdToSocketId: Map<string, string> = new Map();
 
 io.on("connection", (socket) => {
   console.log(`socket ${socket.id} connected`.green);
@@ -47,24 +50,26 @@ io.on("connection", (socket) => {
   });
 
   socket.on("join", ({ roomId, user }) => {
+    socket.join(roomId);
+    socket.broadcast.emit("join", { socketId: socket.id, user });
     console.log(`user ${user?.name} joined on ${roomId}`.green);
     users.set(socket.id, user);
-    socket.join(roomId);
+    userIdToSocketId.set(user.id, socket.id);
+
+    const usersInRoom = rooms.get(roomId) || [];
+    usersInRoom?.push(user);
+
+    rooms.set(roomId, usersInRoom);
     socket.emit("allUsers", { users });
-    socket.broadcast.emit("join", { socketId: socket.id, user });
   });
 
-  // socket.on("offer", ({ roomId, user, offer }) => {
-  //   users.set(socket.id, user);
-  //   socket.join(roomId);
-  //   socket.broadcast.emit("offer", { user, offer });
-  // });
+  socket.on("offer", ({ user, offer }) => {
+    socket.broadcast.emit("offer", { offer, user });
+  });
 
-  // socket.on("answer", ({ roomId, user, answer }) => {
-  //   users.set(socket.id, user);
-  //   socket.join(roomId);
-  //   socket.broadcast.emit("answer", { user, answer });
-  // });
+  socket.on("answer", ({ user, answer }) => {
+    socket.broadcast.emit("answer", { user, answer });
+  });
 
   socket.on("leave", ({ roomId, user }) => {
     socket.leave(roomId);
