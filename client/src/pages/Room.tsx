@@ -43,7 +43,6 @@ const Room = () => {
   const { socket } = useSocket();
 
   const handleJoin = async ({ user }: { user: User }) => {
-    
     console.log(`${user.name} joined`);
 
     const offer = await createOffer();
