@@ -19,9 +19,51 @@ const io = new Server(server, {
 const rooms: RoomMap = new Map();
 const users: UserMap = new Map();
 const userIdToSocketId: Map<string, string> = new Map();
+const socketToRoom: Map<string, string> = new Map();
 
 io.on("connection", (socket) => {
   console.log("a user connected");
+
+  // Handle user join/leave
+  socket.on("join", ({ roomId, user }) => {
+    const usersInRoom = rooms.get(roomId) || [];
+
+    usersInRoom.push(user);
+    rooms.set(roomId, usersInRoom);
+    users.set(socket.id, user);
+    socketToRoom.set(socket.id, roomId);
+
+    const usersArray = Array.from(users.entries())
+      .map(([peerId, user]) => ({
+        peerId,
+        user,
+      }))
+      .filter((user) => user.peerId !== socket.id);
+
+    socket.join(roomId);
+    socket.to(roomId).emit("all-users", { users: usersArray });
+    socket.to(roomId).emit("join", { roomId, user });
+
+    console.log(`${user?.name} joined room: ${roomId}`);
+  });
+
+  socket.on("disconnect", () => {
+    const roomId = socketToRoom.get(socket.id);
+    if (roomId) {
+      const user = users.get(socket.id);
+      if (user) {
+        const usersInRoom = rooms.get(roomId) || [];
+        usersInRoom.filter((i) => i.id !== user.id);
+        rooms.set(roomId, usersInRoom);
+        socketToRoom.set(socket.id, roomId);
+        socket.to(roomId).emit("leave", { peerId: socket.id, user });
+        users.delete(socket.id);
+      }
+      socket.leave(roomId);
+      socket.disconnect();
+    }
+    socketToRoom.delete(socket.id);
+  });
 
   // Handle WebRTC signaling
   socket.on("offer", ({ offer, roomId, userBy, userTo }) => {
@@ -42,14 +84,9 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("ice-candidate", { candidate, userBy });
   });
 
-  socket.on("join", ({ roomId, user }) => {
-    socket.join(roomId);
-    socket.to(roomId).emit("join", { roomId, user });
-    console.log(`${user?.name} joined room: ${roomId}`);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("user disconnected");
+  // message on the room
+  socket.on("message", ({ roomId, message, userBy }) => {
+    socket.to(roomId).emit("message", { message, userBy });
   });
 });
 

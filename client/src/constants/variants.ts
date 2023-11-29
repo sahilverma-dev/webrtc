@@ -7,7 +7,7 @@ export const container: Variants = {
       type: "spring",
       stiffness: 100,
       damping: 15,
-      staggerChildren: 0.08,
+      staggerChildren: 0.05,
     },
   },
 };
