@@ -7,9 +7,9 @@ export const WebRTCContext = createContext<{
     offer: RTCSessionDescription
   ) => Promise<RTCSessionDescriptionInit>;
   setRemoteAnswer: (offer: RTCSessionDescription) => Promise<void>;
-  sendStream: (stream: MediaStream) => void;
+  addLocalTrack: (stream: MediaStream) => void;
   dataChannel: RTCDataChannel;
-  resetPeerConnection: () => void
+  resetPeerConnection: () => void;
 } | null>(null);
 
 export const WebRTCProvider = (props: PropsWithChildren) => {
@@ -56,7 +56,8 @@ export const WebRTCProvider = (props: PropsWithChildren) => {
     try {
       await peer.setRemoteDescription(offer);
       const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
+      if (!peer.currentRemoteDescription)
+        await peer.setLocalDescription(answer);
       console.log("answer created");
 
       return answer;
@@ -71,35 +72,31 @@ export const WebRTCProvider = (props: PropsWithChildren) => {
     await peer.setRemoteDescription(ans);
   };
 
+  const addLocalTrack = (stream: MediaStream) => {
+    console.log("Adding local stream to the peer");
 
+    const tracks = stream.getTracks();
 
- const sendStream = (stream: MediaStream) => {
-  console.log("sending stream");
-
-  const tracks = stream.getTracks();
-
-  for (const track of tracks) {
-    console.log("Checking track:", track);
-    const sender = peer.getSenders().find((s) => s.track === track);
-    if (!sender) {
-      console.log("Adding track:", track);
-      peer.addTrack(track, stream);
-    } else {
-      console.log("Track already added:", track);
+    for (const track of tracks) {
+      console.log("Checking track:", track);
+      const sender = peer.getSenders().find((s) => s.track === track);
+      if (!sender) {
+        console.log("Adding track:", track);
+        peer.addTrack(track, stream);
+      } else {
+        console.log("Track already added:", track);
+      }
     }
-  }
-};
-
+  };
 
   const resetPeerConnection = () => {
     // Reset existing sender state
     peer.getSenders().forEach((sender) => {
       peer.removeTrack(sender);
     });
-  
+
     // Add new tracks or perform other initialization
   };
-  
 
   return (
     <WebRTCContext.Provider
@@ -108,9 +105,9 @@ export const WebRTCProvider = (props: PropsWithChildren) => {
         createOffer,
         createAnswer,
         setRemoteAnswer,
-        sendStream,
+        addLocalTrack,
         dataChannel,
-        resetPeerConnection
+        resetPeerConnection,
       }}
     >
       {props.children}

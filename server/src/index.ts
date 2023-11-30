@@ -19,9 +19,32 @@ const io = new Server(server, {
 const rooms: RoomMap = new Map();
 const users: UserMap = new Map();
 const userIdToSocketId: Map<string, string> = new Map();
+const socketIdToRoom: Map<string, string> = new Map();
 
 io.on("connection", (socket) => {
   console.log("a user connected");
+
+  // Handle join and leave
+  socket.on("join", ({ roomId, user }) => {
+    socket.join(roomId);
+    socket.to(roomId).emit("join", { roomId, user });
+    socketIdToRoom.set(socket.id, roomId);
+    users.set(socket.id, user);
+    console.log(`${user?.name} joined room: ${roomId}`);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("user disconnected");
+    const roomId = socketIdToRoom.get(socket.id);
+    const user = users.get(socket.id);
+    if (roomId && user) {
+      socket.to(roomId).emit("leave", { user });
+      socket.leave(roomId);
+      users.delete(socket.id);
+      socketIdToRoom.delete(socket.id);
+      socket.disconnect();
+    }
+  });
 
   // Handle WebRTC signaling
   socket.on("offer", ({ offer, roomId, userBy, userTo }) => {
@@ -40,16 +63,6 @@ io.on("connection", (socket) => {
 
   socket.on("ice-candidate", ({ candidate, roomId, userBy }) => {
     socket.to(roomId).emit("ice-candidate", { candidate, userBy });
-  });
-
-  socket.on("join", ({ roomId, user }) => {
-    socket.join(roomId);
-    socket.to(roomId).emit("join", { roomId, user });
-    console.log(`${user?.name} joined room: ${roomId}`);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("user disconnected");
   });
 });
 

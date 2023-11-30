@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+// import { Button } from "@/components/ui/button";
 import { useSocket, useWebRTC } from "@/hooks";
 import { motion } from "framer-motion";
 import { User } from "@/interfaces";
@@ -7,6 +7,8 @@ import { faker } from "@faker-js/faker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { container, item } from "@/constants/variants";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 const getRandomUser = () => {
   return {
     id: crypto.randomUUID(),
@@ -19,12 +21,13 @@ const getRandomUser = () => {
 const user = getRandomUser();
 
 const Room = () => {
-  const [peerConnected, setPeerConnected] = useState(false);
+  const [isPeerConnected, setIsPeerConnected] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(
     null
   );
+  const [remoteMediaStream, setRemoteMediaStream] = useState(new MediaStream());
   const { roomId } = useParams<{ roomId: string }>();
   const { socket } = useSocket();
   const {
@@ -33,7 +36,7 @@ const Room = () => {
     createAnswer,
     setRemoteAnswer,
     dataChannel,
-    sendStream,
+    addLocalTrack,
   } = useWebRTC();
 
   useEffect(() => {
@@ -42,11 +45,12 @@ const Room = () => {
     };
   }, []);
 
+  // handling events
   const handleJoin = useCallback(
     async ({ user: otherUser }: { user: User }) => {
       const offer = await createOffer();
       console.log(`offer created for ${otherUser.name}`, offer);
-
+      toast.success(`${otherUser.name} joined the room`);
       socket?.emit("offer", {
         offer,
         userTo: otherUser,
@@ -56,7 +60,16 @@ const Room = () => {
     },
     [createOffer, roomId, socket]
   );
+  const handleLeave = useCallback(async ({ user }: { user: User }) => {
+    console.log(`${user.name} left the room`);
 
+    // removing the stream
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = new MediaStream();
+    }
+    setIsPeerConnected(false);
+    toast.error(`${user.name} left the room`);
+  }, []);
   const handleOffer = useCallback(
     async ({
       userBy: otherUser,
@@ -92,7 +105,6 @@ const Room = () => {
     },
     [setRemoteAnswer]
   );
-
   const handleICECandidates = useCallback(
     async ({
       candidate,
@@ -102,14 +114,13 @@ const Room = () => {
       candidate: RTCIceCandidate;
     }) => {
       console.log(`got the ice candidate from ${userBy.name}`);
-
       peer.addIceCandidate(candidate);
     },
     [peer]
   );
 
   useEffect(() => {
-    (async () => {
+    const getUserLocalMediaStream = async () => {
       try {
         const media = await navigator.mediaDevices.getUserMedia({
           // audio: true,
@@ -119,26 +130,41 @@ const Room = () => {
         setLocalMediaStream(media);
         if (localVideoRef.current && media) {
           localVideoRef.current.srcObject = media;
+          addLocalTrack(media);
         }
       } catch (error) {
         console.log(error);
       }
-    })();
+    };
+    return () => {
+      getUserLocalMediaStream();
+    };
   }, []);
 
   useEffect(() => {
+    // socket events
     socket?.on("join", handleJoin);
+    socket?.on("leave", handleLeave);
     socket?.on("offer", handleOffer);
     socket?.on("answer", handleAnswer);
     socket?.on("ice-candidate", handleICECandidates);
-    peer.ontrack = (tracks) => {
-      console.log("got the tracks", tracks);
-      const stream = tracks.streams[0];
-      if (remoteVideoRef?.current) {
-        remoteVideoRef.current.srcObject = stream;
+
+    // peer events
+    peer.ontrack = (event) => {
+      console.log("got the track", event.track);
+
+      event.streams[0].getTracks().forEach((track) => {
+        setRemoteMediaStream((state) => {
+          state.addTrack(track);
+
+          return state;
+        });
+      });
+
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteMediaStream;
       }
     };
-
     peer.onicecandidate = (event) => {
       if (event.candidate) {
         // Send the ICE candidate to the other peer
@@ -149,22 +175,20 @@ const Room = () => {
         });
       }
     };
-
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === "connected") {
-        console.log("Peers connected!", localMediaStream);
+        console.log("Peers connected!");
       }
     };
-
     dataChannel.onopen = () => {
       console.log("fuck it data channel is open now ");
-      setPeerConnected(true);
-      if (localMediaStream) sendStream(localMediaStream);
-      else console.log("no media");
+      setIsPeerConnected(true);
     };
 
     return () => {
+      // remove the events on unmount
       socket?.off("join", handleJoin);
+      socket?.off("leave", handleLeave);
       socket?.off("offer", handleOffer);
       socket?.off("answer", handleAnswer);
       socket?.off("ice-candidate", handleICECandidates);
@@ -174,11 +198,12 @@ const Room = () => {
     handleAnswer,
     handleICECandidates,
     handleJoin,
+    handleLeave,
     handleOffer,
     localMediaStream,
     peer,
+    remoteMediaStream,
     roomId,
-    sendStream,
     socket,
   ]);
 
@@ -214,30 +239,33 @@ const Room = () => {
               className=" w-full h-full object-cover"
             />
           </motion.div>
-          {peerConnected && (
-            <motion.div
-              layout
-              variants={item}
-              className="w-full flex items-center gap-4 flex-col h-full border rounded-lg aspect-video overflow-hidden"
-            >
-              <video
-                ref={remoteVideoRef}
-                controls={false}
-                autoPlay
-                className=" w-full h-full object-cover"
-              />
-            </motion.div>
-          )}
+
+          <motion.div
+            layout
+            variants={item}
+            className={cn([
+              "w-full flex items-center gap-4 flex-col h-full border rounded-lg aspect-video overflow-hidden",
+              !isPeerConnected && "hidden",
+            ])}
+          >
+            <video
+              ref={remoteVideoRef}
+              controls={false}
+              autoPlay
+              className=" w-full h-full object-cover"
+            />
+          </motion.div>
         </motion.div>
-        <div className="flex gap-2">
+        {/* <div className="flex gap-2">
           <Button
             onClick={() => {
-              dataChannel.send("hello");
+              // dataChannel.send("hello");
+              console.log(remoteVideoRef);
             }}
           >
             Send Message
           </Button>
-        </div>
+        </div> */}
       </div>
     </div>
   );
