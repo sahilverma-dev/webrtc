@@ -123,7 +123,7 @@ const Room = () => {
     const getUserLocalMediaStream = async () => {
       try {
         const media = await navigator.mediaDevices.getUserMedia({
-          audio: true,
+          // audio: true,
           video: true,
         });
 
@@ -156,15 +156,16 @@ const Room = () => {
       event.streams[0].getTracks().forEach((track) => {
         setRemoteMediaStream((state) => {
           state.addTrack(track);
-
           return state;
         });
       });
 
       if (remoteVideoRef.current) {
+        console.log("setting the track to remote video element");
         remoteVideoRef.current.srcObject = remoteMediaStream;
       }
     };
+
     peer.onicecandidate = (event) => {
       if (event.candidate) {
         // Send the ICE candidate to the other peer
@@ -224,7 +225,7 @@ const Room = () => {
           variants={container}
           initial="hidden"
           animate="visible"
-          className="w-full grid gap-4 grid-cols-2 md:grid-cols-3"
+          className="w-full grid gap-4 grid-cols-2 lg:grid-cols-3"
         >
           <motion.div
             layout

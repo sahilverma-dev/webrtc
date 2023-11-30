@@ -37,11 +37,31 @@ export const WebRTCProvider = (props: PropsWithChildren) => {
     console.log("Received message:", event.data);
   };
 
+  const addLocalTrack = (stream: MediaStream) => {
+    console.log("Adding local stream to the peer");
+
+    const tracks = stream.getTracks();
+
+    for (const track of tracks) {
+      console.log("Checking track:", track);
+      const sender = peer.getSenders().find((s) => s.track === track);
+      if (!sender) {
+        console.log("Adding track:", track);
+        peer.addTrack(track, stream);
+      } else {
+        console.log("Track already added:", track);
+      }
+    }
+  };
+
   const createOffer = async () => {
     console.log("creating offer");
 
     try {
-      const offer = await peer.createOffer();
+      const offer = await peer.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
       await peer.setLocalDescription(offer);
       return offer;
     } catch (error) {
@@ -70,23 +90,6 @@ export const WebRTCProvider = (props: PropsWithChildren) => {
   const setRemoteAnswer = async (ans: RTCSessionDescription) => {
     console.log("got the answer and setting the answer as remote SDP");
     await peer.setRemoteDescription(ans);
-  };
-
-  const addLocalTrack = (stream: MediaStream) => {
-    console.log("Adding local stream to the peer");
-
-    const tracks = stream.getTracks();
-
-    for (const track of tracks) {
-      console.log("Checking track:", track);
-      const sender = peer.getSenders().find((s) => s.track === track);
-      if (!sender) {
-        console.log("Adding track:", track);
-        peer.addTrack(track, stream);
-      } else {
-        console.log("Track already added:", track);
-      }
-    }
   };
 
   const resetPeerConnection = () => {

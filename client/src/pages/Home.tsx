@@ -5,7 +5,7 @@ const Home = () => {
   const navigate = useNavigate();
 
   return (
-    <div>
+    <div className="p-4">
       <Button
         onClick={() => {
           navigate(`/room/${crypto.randomUUID()}`);
