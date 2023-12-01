@@ -45,6 +45,8 @@ const Room = () => {
 
   const handleLeave = useCallback(
     async ({ user: otherUser, peerId }: { user: User; peerId: string }) => {
+      console.log(user);
+
       toast.error(`${otherUser.name} left`);
       setPeers((peers) => peers.filter((i) => i.peerId !== peerId));
     },
@@ -88,17 +90,6 @@ const Room = () => {
             animate="visible"
             className="w-full grid gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
           >
-            <motion.div
-              variants={item}
-              className="flex items-center flex-col gap-2 border rounded-lg p-4"
-            >
-              <Avatar className="border">
-                <AvatarImage src={user.image} />
-                <AvatarFallback>{user.name.split(" ").join("")}</AvatarFallback>
-              </Avatar>
-
-              <div className="font-bold truncate">{user.name}</div>
-            </motion.div>
             {peers.map((peer) => (
               <motion.div
                 key={peer.peerId}
