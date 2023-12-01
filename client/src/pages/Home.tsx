@@ -1,5 +1,13 @@
 import { Button } from "@/components/ui/button";
+import { SoundEffect } from "@/services/SoundEffect";
+import { WebRTC } from "@/services/WebRTC";
 import { useNavigate } from "react-router-dom";
+
+const webrtc = new WebRTC();
+
+console.log(webrtc);
+
+const soundEffect = new SoundEffect("join");
 
 const Home = () => {
   const navigate = useNavigate();
@@ -12,6 +20,13 @@ const Home = () => {
         }}
       >
         Create Room
+      </Button>
+      <Button
+        onClick={() => {
+          soundEffect.play();
+        }}
+      >
+        Play Sound
       </Button>
     </div>
   );
