@@ -1,14 +1,8 @@
+import { io, Socket } from "socket.io-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-// import { Button } from "@/components/ui/button";
-import { useSocket, useWebRTC } from "@/hooks";
-import { motion } from "framer-motion";
-import { User } from "@/interfaces";
 import { faker } from "@faker-js/faker";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { container, item } from "@/constants/variants";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 const getRandomUser = () => {
   return {
     id: crypto.randomUUID(),
@@ -21,195 +15,167 @@ const getRandomUser = () => {
 const user = getRandomUser();
 
 const Room = () => {
-  const [isPeerConnected, setIsPeerConnected] = useState(false);
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(
-    null
-  );
-  const [remoteMediaStream, setRemoteMediaStream] = useState(new MediaStream());
+  const userVideo = useRef<HTMLVideoElement>();
+  const partnerVideo = useRef<HTMLVideoElement>();
+  const peerRef = useRef<RTCPeerConnection>();
+
+  const socketRef = useRef<Socket>();
+  const otherUser = useRef();
+  const userStream = useRef(new MediaStream());
   const { roomId } = useParams<{ roomId: string }>();
-  const { socket } = useSocket();
-  const {
-    peer,
-    createOffer,
-    createAnswer,
-    setRemoteAnswer,
-    dataChannel,
-    addLocalTrack,
-  } = useWebRTC();
 
-  useEffect(() => {
-    return () => {
-      socket?.emit("join", { roomId, user });
-    };
+  const createPeer = useCallback((userID: string) => {
+    const peer = new RTCPeerConnection({
+      iceServers: [
+        {
+          urls: "stun:stun.stunprotocol.org",
+        },
+        {
+          urls: "turn:numb.viagenie.ca",
+          credential: "muazkh",
+          username: "webrtc@live.com",
+        },
+      ],
+    });
+
+    peer.onicecandidate = handleICECandidateEvent;
+    peer.ontrack = handleTrackEvent;
+    peer.onnegotiationneeded = () => handleNegotiationNeededEvent(userID);
+
+    return peer;
   }, []);
 
-  // handling events
-  const handleJoin = useCallback(
-    async ({ user: otherUser }: { user: User }) => {
-      const offer = await createOffer();
-      console.log(`offer created for ${otherUser.name}`, offer);
-      toast.success(`${otherUser.name} joined the room`);
-      socket?.emit("offer", {
-        offer,
-        userTo: otherUser,
-        userBy: user,
-        roomId,
+  const callUser = useCallback(
+    (userID: string) => {
+      peerRef.current = createPeer(userID);
+      userStream.current.getTracks().forEach((track) => {
+        if (peerRef.current)
+          peerRef?.current.addTrack(track, userStream.current);
       });
     },
-    [createOffer, roomId, socket]
+    [createPeer]
   );
-  const handleLeave = useCallback(async ({ user }: { user: User }) => {
-    console.log(`${user.name} left the room`);
 
-    // removing the stream
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = new MediaStream();
-    }
-    setIsPeerConnected(false);
-    toast.error(`${user.name} left the room`);
+  const handleNegotiationNeededEvent = useCallback((userID: string) => {
+    if (peerRef.current)
+      peerRef.current
+        .createOffer()
+        .then((offer) => {
+          if (peerRef?.current)
+            return peerRef?.current.setLocalDescription(offer);
+        })
+        .then(() => {
+          if (socketRef.current && peerRef.current) {
+            const payload = {
+              target: userID,
+              caller: socketRef.current.id,
+              sdp: peerRef.current.localDescription,
+            };
+            socketRef.current.emit("offer", payload);
+          }
+        })
+        .catch((e) => console.log(e));
   }, []);
-  const handleOffer = useCallback(
-    async ({
-      userBy: otherUser,
-      offer,
-    }: {
-      userBy: User;
-      offer: RTCSessionDescription;
-    }) => {
-      console.log(`got the offer from ${otherUser.name}`, offer);
 
-      const answer = await createAnswer(offer);
-      console.log(`created answer for ${otherUser.name}`, answer);
-      socket?.emit("answer", {
-        answer,
-        userTo: otherUser,
-        userBy: user,
-        roomId,
-      });
+  const handleRecieveCall = useCallback(
+    (incoming: { caller: string; sdp: RTCSessionDescription }) => {
+      peerRef.current = createPeer();
+      const desc = new RTCSessionDescription(incoming.sdp);
+      peerRef.current
+        .setRemoteDescription(desc)
+        .then(() => {
+          userStream.current.getTracks().forEach((track) => {
+            if (peerRef.current)
+              peerRef.current.addTrack(track, userStream.current);
+          });
+        })
+        .then(() => {
+          if (peerRef.current) return peerRef.current.createAnswer();
+        })
+        .then((answer) => {
+          if (peerRef.current)
+            return peerRef.current.setLocalDescription(answer);
+        })
+        .then(() => {
+          if (peerRef.current && socketRef.current) {
+            const payload = {
+              target: incoming.caller,
+              caller: socketRef.current.id,
+              sdp: peerRef.current.localDescription,
+            };
+            socketRef.current.emit("answer", payload);
+          }
+        });
     },
-    [createAnswer, roomId, socket]
+    [createPeer]
   );
+
   const handleAnswer = useCallback(
-    async ({
-      answer,
-      userBy,
-    }: {
-      userBy: User;
-      answer: RTCSessionDescription;
-    }) => {
-      console.log(`got the answer from ${userBy.name}`, answer);
+    (message: { sdp: RTCSessionDescription }) => {
+      const desc = new RTCSessionDescription(message?.sdp);
 
-      setRemoteAnswer(answer);
+      if (peerRef.current)
+        peerRef.current.setRemoteDescription(desc).catch((e) => console.log(e));
     },
-    [setRemoteAnswer]
-  );
-  const handleICECandidates = useCallback(
-    async ({
-      candidate,
-      userBy,
-    }: {
-      userBy: User;
-      candidate: RTCIceCandidate;
-    }) => {
-      console.log(`got the ice candidate from ${userBy.name}`);
-      peer.addIceCandidate(candidate);
-    },
-    [peer]
+    []
   );
 
-  useEffect(() => {
-    const getUserLocalMediaStream = async () => {
-      try {
-        const media = await navigator.mediaDevices.getUserMedia({
-          // audio: true,
-          video: true,
-        });
-
-        setLocalMediaStream(media);
-        if (localVideoRef.current && media) {
-          localVideoRef.current.srcObject = media;
-          addLocalTrack(media);
-        }
-      } catch (error) {
-        console.log(error);
+  const handleICECandidateEvent = useCallback((e: RTCIceCandidate) => {
+    if (e.candidate) {
+      const payload = {
+        target: otherUser.current,
+        candidate: e.candidate,
+      };
+      if (socketRef.current) {
+        socketRef.current.emit("ice-candidate", payload);
       }
-    };
-    return () => {
-      getUserLocalMediaStream();
-    };
+    }
+  }, []);
+
+  const handleNewICECandidateMsg = useCallback((incoming: RTCIceCandidate) => {
+    const candidate = new RTCIceCandidate(incoming);
+    if (peerRef.current)
+      peerRef.current.addIceCandidate(candidate).catch((e) => console.log(e));
+  }, []);
+
+  const handleTrackEvent = useCallback((e: RTCTrackEvent) => {
+    if (partnerVideo.current) partnerVideo.current.srcObject = e.streams[0];
   }, []);
 
   useEffect(() => {
-    // socket events
-    socket?.on("join", handleJoin);
-    socket?.on("leave", handleLeave);
-    socket?.on("offer", handleOffer);
-    socket?.on("answer", handleAnswer);
-    socket?.on("ice-candidate", handleICECandidates);
+    navigator.mediaDevices
+      .getUserMedia({ audio: true, video: true })
+      .then((stream) => {
+        if (userVideo.current) userVideo.current.srcObject = stream;
+        userStream.current = stream;
 
-    // peer events
-    peer.ontrack = (event) => {
-      console.log("got the track", event.track);
-
-      event.streams[0].getTracks().forEach((track) => {
-        setRemoteMediaStream((state) => {
-          state.addTrack(track);
-          return state;
+        socketRef.current = io("http://localhost:5000", {
+          reconnection: false,
         });
+
+        if (socketRef.current) {
+          socketRef?.current.emit("join room", roomId);
+
+          socketRef.current.on("other user", (userID) => {
+            callUser(userID);
+            otherUser.current = userID;
+          });
+
+          socketRef.current.on("user joined", (userID) => {
+            otherUser.current = userID;
+          });
+
+          socketRef.current.on("offer", handleRecieveCall);
+
+          socketRef.current.on("answer", handleAnswer);
+
+          socketRef.current.on("ice-candidate", handleNewICECandidateMsg);
+        }
       });
-
-      if (remoteVideoRef.current) {
-        console.log("setting the track to remote video element");
-        remoteVideoRef.current.srcObject = remoteMediaStream;
-      }
-    };
-
-    peer.onicecandidate = (event) => {
-      if (event.candidate) {
-        // Send the ICE candidate to the other peer
-        socket?.emit("ice-candidate", {
-          userBy: user,
-          candidate: event.candidate,
-          roomId,
-        });
-      }
-    };
-    peer.onconnectionstatechange = () => {
-      if (peer.connectionState === "connected") {
-        console.log("Peers connected!");
-      }
-    };
-    dataChannel.onopen = () => {
-      console.log("fuck it data channel is open now ");
-      setIsPeerConnected(true);
-    };
-
-    return () => {
-      // remove the events on unmount
-      socket?.off("join", handleJoin);
-      socket?.off("leave", handleLeave);
-      socket?.off("offer", handleOffer);
-      socket?.off("answer", handleAnswer);
-      socket?.off("ice-candidate", handleICECandidates);
-    };
-  }, [
-    dataChannel,
-    handleAnswer,
-    handleICECandidates,
-    handleJoin,
-    handleLeave,
-    handleOffer,
-    localMediaStream,
-    peer,
-    remoteMediaStream,
-    roomId,
-    socket,
-  ]);
+  }, []);
 
   return (
-    <div className="">
+    <div>
       <div className="flex border-b p-4 w-full items-center justify-between">
         <h1 className="font-bold">Room</h1>
         <div className="flex items-center gap-2">
@@ -220,53 +186,9 @@ const Room = () => {
           </Avatar>
         </div>
       </div>
-      <div className="p-4 space-y-2">
-        <motion.div
-          variants={container}
-          initial="hidden"
-          animate="visible"
-          className="w-full grid gap-4 grid-cols-2 lg:grid-cols-3"
-        >
-          <motion.div
-            layout
-            variants={item}
-            className="w-full flex items-center gap-4 flex-col h-full border rounded-lg aspect-video overflow-hidden"
-          >
-            <video
-              ref={localVideoRef}
-              controls={false}
-              autoPlay
-              muted
-              className=" w-full h-full object-cover"
-            />
-          </motion.div>
-
-          <motion.div
-            layout
-            variants={item}
-            className={cn([
-              "w-full flex items-center gap-4 flex-col h-full border rounded-lg aspect-video overflow-hidden",
-              !isPeerConnected && "hidden",
-            ])}
-          >
-            <video
-              ref={remoteVideoRef}
-              controls={false}
-              autoPlay
-              className=" w-full h-full object-cover"
-            />
-          </motion.div>
-        </motion.div>
-        {/* <div className="flex gap-2">
-          <Button
-            onClick={() => {
-              // dataChannel.send("hello");
-              console.log(remoteVideoRef);
-            }}
-          >
-            Send Message
-          </Button>
-        </div> */}
+      <div className="flex">
+        <video autoPlay ref={userVideo} muted />
+        <video autoPlay ref={partnerVideo} />
       </div>
     </div>
   );

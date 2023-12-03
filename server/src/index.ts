@@ -16,53 +16,44 @@ const io = new Server(server, {
   },
 });
 
-const rooms: RoomMap = new Map();
-const users: UserMap = new Map();
-const userIdToSocketId: Map<string, string> = new Map();
-const socketIdToRoom: Map<string, string> = new Map();
+interface Room {
+  [roomId: string]: string[];
+}
+
+const rooms: Room = {};
+
+interface Payload {
+  target: string;
+  candidate?: RTCIceCandidate;
+}
 
 io.on("connection", (socket) => {
-  console.log("a user connected");
+  socket.on("join room", (roomID: string) => {
+    console.log("user joined");
 
-  // Handle join and leave
-  socket.on("join", ({ roomId, user }) => {
-    socket.join(roomId);
-    socket.to(roomId).emit("join", { roomId, user });
-    socketIdToRoom.set(socket.id, roomId);
-    users.set(socket.id, user);
-    console.log(`${user?.name} joined room: ${roomId}`);
-  });
+    if (rooms[roomID]) {
+      rooms[roomID].push(socket.id);
+    } else {
+      rooms[roomID] = [socket.id];
+    }
 
-  socket.on("disconnect", () => {
-    console.log("user disconnected");
-    const roomId = socketIdToRoom.get(socket.id);
-    const user = users.get(socket.id);
-    if (roomId && user) {
-      socket.to(roomId).emit("leave", { user });
-      socket.leave(roomId);
-      users.delete(socket.id);
-      socketIdToRoom.delete(socket.id);
-      socket.disconnect();
+    const otherUser = rooms[roomID].find((id) => id !== socket.id);
+    if (otherUser) {
+      socket.emit("other user", otherUser);
+      socket.to(otherUser).emit("user joined", socket.id);
     }
   });
 
-  // Handle WebRTC signaling
-  socket.on("offer", ({ offer, roomId, userBy, userTo }) => {
-    console.log(
-      `got offer from ${userBy.name} to ${userTo.name} and room ${roomId}`
-    );
-    socket.to(roomId).emit("offer", { offer, userBy });
+  socket.on("offer", (payload: Payload) => {
+    io.to(payload.target).emit("offer", payload);
   });
 
-  socket.on("answer", ({ answer, roomId, userBy, userTo }) => {
-    console.log(
-      `got answer from ${userBy.name} to ${userTo.name} and room ${roomId}`
-    );
-    socket.to(roomId).emit("answer", { answer, userBy });
+  socket.on("answer", (payload: Payload) => {
+    io.to(payload.target).emit("answer", payload);
   });
 
-  socket.on("ice-candidate", ({ candidate, roomId, userBy }) => {
-    socket.to(roomId).emit("ice-candidate", { candidate, userBy });
+  socket.on("ice-candidate", (incoming: Payload) => {
+    io.to(incoming.target).emit("ice-candidate", incoming.candidate);
   });
 });
 
