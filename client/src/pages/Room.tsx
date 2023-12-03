@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-// import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { useSocket, useWebRTC } from "@/hooks";
 import { motion } from "framer-motion";
 import { User } from "@/interfaces";
@@ -21,7 +21,7 @@ const getRandomUser = () => {
 const user = getRandomUser();
 
 const Room = () => {
-  const [isPeerConnected, setIsPeerConnected] = useState(false);
+  // const [isPeerConnected, setIsPeerConnected] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(
@@ -30,20 +30,8 @@ const Room = () => {
   const [remoteMediaStream, setRemoteMediaStream] = useState(new MediaStream());
   const { roomId } = useParams<{ roomId: string }>();
   const { socket } = useSocket();
-  const {
-    peer,
-    createOffer,
-    createAnswer,
-    setRemoteAnswer,
-    dataChannel,
-    addLocalTrack,
-  } = useWebRTC();
-
-  useEffect(() => {
-    return () => {
-      socket?.emit("join", { roomId, user });
-    };
-  }, []);
+  const { peer, createOffer, createAnswer, setRemoteAnswer, addLocalTrack } =
+    useWebRTC();
 
   // handling events
   const handleJoin = useCallback(
@@ -67,7 +55,7 @@ const Room = () => {
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = new MediaStream();
     }
-    setIsPeerConnected(false);
+
     toast.error(`${user.name} left the room`);
   }, []);
   const handleOffer = useCallback(
@@ -123,10 +111,11 @@ const Room = () => {
     const getUserLocalMediaStream = async () => {
       try {
         const media = await navigator.mediaDevices.getUserMedia({
-          // audio: true,
+          audio: true,
           video: true,
         });
 
+        socket?.emit("join", { roomId, user });
         setLocalMediaStream(media);
         if (localVideoRef.current && media) {
           localVideoRef.current.srcObject = media;
@@ -181,10 +170,6 @@ const Room = () => {
         console.log("Peers connected!");
       }
     };
-    dataChannel.onopen = () => {
-      console.log("fuck it data channel is open now ");
-      setIsPeerConnected(true);
-    };
 
     return () => {
       // remove the events on unmount
@@ -195,7 +180,6 @@ const Room = () => {
       socket?.off("ice-candidate", handleICECandidates);
     };
   }, [
-    dataChannel,
     handleAnswer,
     handleICECandidates,
     handleJoin,
@@ -220,7 +204,15 @@ const Room = () => {
           </Avatar>
         </div>
       </div>
+
       <div className="p-4 space-y-2">
+        {/* <Button
+          onClick={() => {
+            socket?.emit("join", { roomId, user });
+          }}
+        >
+          Join the room
+        </Button> */}
         <motion.div
           variants={container}
           initial="hidden"
@@ -246,7 +238,7 @@ const Room = () => {
             variants={item}
             className={cn([
               "w-full flex items-center gap-4 flex-col h-full border rounded-lg aspect-video overflow-hidden",
-              !isPeerConnected && "hidden",
+              // !isPeerConnected && "hidden",
             ])}
           >
             <video
