@@ -73,3 +73,7 @@ console.clear();
 server.listen(PORT, () => {
   console.log("Server is running on port".green, PORT.toString().white);
 });
+
+app.get("/", (req, res) => {
+  res.send("Server is running");
+});
