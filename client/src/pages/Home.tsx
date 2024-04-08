@@ -8,7 +8,7 @@ const Home = () => {
     <div className="p-4">
       <Button
         onClick={() => {
-          navigate(`/room/${crypto.randomUUID()}`);
+          navigate(`/room/${crypto?.randomUUID()}`);
         }}
       >
         Create Room

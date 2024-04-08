@@ -2,23 +2,25 @@ import "colors";
 import { createServer } from "http";
 import express from "express";
 import { Server } from "socket.io";
-import { RoomMap, UserMap } from "./interfaces";
+import { UserMap } from "./interfaces";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
+const ORIGIN = process.env.ORIGIN || `*`;
 
 const server = createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: ORIGIN,
   },
 });
 
-const rooms: RoomMap = new Map();
 const users: UserMap = new Map();
-const userIdToSocketId: Map<string, string> = new Map();
 const socketIdToRoom: Map<string, string> = new Map();
 
 io.on("connection", (socket) => {

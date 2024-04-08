@@ -10,7 +10,7 @@ interface SocketProviderProps {
 }
 
 const SocketProvider: FC<SocketProviderProps> = ({ children }) => {
-  const socket = io("http://localhost:5000", {
+  const socket = io(import.meta.env.VITE_SOCKET_IO_URI, {
     reconnection: false,
     // autoConnect: false
   });
