@@ -125,9 +125,7 @@ const Room = () => {
         console.log(error);
       }
     };
-    return () => {
-      getUserLocalMediaStream();
-    };
+    getUserLocalMediaStream();
   }, []);
 
   useEffect(() => {
