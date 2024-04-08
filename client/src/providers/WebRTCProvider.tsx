@@ -19,8 +19,6 @@ export const WebRTCProvider = (props: PropsWithChildren) => {
         urls: [
           "stun:stun.l.google.com:19302",
           "stun:global.stun.twilio.com:3478",
-          "turn:turn01.hubl.in?transport=udp",
-          "turn:turn02.hubl.in?transport=tcp",
         ],
       },
     ],

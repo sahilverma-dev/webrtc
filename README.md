@@ -73,6 +73,3 @@ In this project, I'll explore different aspects of WebRTC, including:
 - **Twitter:** [@sahilverma_dev](https://twitter.com/sahilverma_dev)
 - **LinkedIn:** [sahilverma-dev](https://www.linkedin.com/in/sahilverma-dev/)
 
-```
-
-```
