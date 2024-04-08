@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+
 import { useSocket, useWebRTC } from "@/hooks";
 import { motion } from "framer-motion";
 import { User } from "@/interfaces";
