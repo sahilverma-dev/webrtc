@@ -20,10 +20,15 @@ In this project, I'll explore different aspects of WebRTC, including:
 - Integrating data channels for non-media communication
 - Exploring advanced features like screen sharing and file transfer
 
+## Todo
+
+- [ ] Custom TURN server
+- [ ] File transfer
+- [ ] Group video chat with SFU
+
 ## Features
 
 - Peer-to-peer audio and video communication under same network
-- [Will be add more]
 
 ## Installation
 
