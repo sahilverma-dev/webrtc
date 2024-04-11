@@ -1,3 +1,10 @@
+import {
+  STUN_SERVER,
+  TURN_SERVER_1,
+  TURN_SERVER_2,
+  TURN_SERVER_3,
+  TURN_SERVER_4,
+} from "@/constants/env";
 import { PropsWithChildren, createContext } from "react";
 
 export const WebRTCContext = createContext<{
@@ -21,6 +28,11 @@ export const WebRTCProvider = (props: PropsWithChildren) => {
           "stun:global.stun.twilio.com:3478",
         ],
       },
+      STUN_SERVER,
+      TURN_SERVER_1,
+      TURN_SERVER_2,
+      TURN_SERVER_3,
+      TURN_SERVER_4,
     ],
   });
 
