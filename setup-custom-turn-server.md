@@ -1,6 +1,6 @@
 # Setup custom TURN server
 
-I've followed this article to setup my TURN server in AWS ES 2 instance.
+I've followed this article to setup my TURN server in AWS EC 2 instance.
 
 [https://medium.com/@otacorporation0520/set-up-stun-turn-server-for-the-video-chat-app-ee8dc6fb9b15](https://medium.com/@otacorporation0520/set-up-stun-turn-server-for-the-video-chat-app-ee8dc6fb9b15)
 
