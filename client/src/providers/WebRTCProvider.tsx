@@ -1,11 +1,6 @@
-import {
-  STUN_SERVER,
-  TURN_SERVER_1,
-  TURN_SERVER_2,
-  TURN_SERVER_3,
-  TURN_SERVER_4,
-} from "@/constants/env";
 import { PropsWithChildren, createContext } from "react";
+
+import { TURN_PASSWORD, TURN_SERVER, TURN_USERNAME } from "@/constants/env";
 
 export const WebRTCContext = createContext<{
   peer: RTCPeerConnection;
@@ -28,11 +23,11 @@ export const WebRTCProvider = (props: PropsWithChildren) => {
           "stun:global.stun.twilio.com:3478",
         ],
       },
-      STUN_SERVER,
-      TURN_SERVER_1,
-      TURN_SERVER_2,
-      TURN_SERVER_3,
-      TURN_SERVER_4,
+      {
+        urls: [TURN_SERVER],
+        username: TURN_USERNAME,
+        credential: TURN_PASSWORD,
+      },
     ],
   });
 
