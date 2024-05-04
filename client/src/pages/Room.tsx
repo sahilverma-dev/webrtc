@@ -21,7 +21,7 @@ const getRandomUser = () => {
 const user = getRandomUser();
 
 const Room = () => {
-  // const [isPeerConnected, setIsPeerConnected] = useState(false);
+  const [isPeerConnected, setIsPeerConnected] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(
@@ -165,6 +165,7 @@ const Room = () => {
     };
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === "connected") {
+        setIsPeerConnected(true);
         console.log("Peers connected!");
       }
     };
@@ -191,7 +192,7 @@ const Room = () => {
   ]);
 
   return (
-    <div className="">
+    <div className="h-dvh ">
       <div className="flex border-b p-4 w-full items-center justify-between">
         <h1 className="font-bold">Room</h1>
         <div className="flex items-center gap-2">
@@ -203,7 +204,7 @@ const Room = () => {
         </div>
       </div>
 
-      <div className="p-4 space-y-2">
+      <div className="p-4 h-full space-y-2">
         {/* <Button
           onClick={() => {
             socket?.emit("join", { roomId, user });
@@ -215,12 +216,13 @@ const Room = () => {
           variants={container}
           initial="hidden"
           animate="visible"
-          className="w-full grid gap-4 grid-cols-2 lg:grid-cols-3"
+          className="w-full h-full md:h-auto gap-4 flex flex-col md:flex-row "
+          // className="w-full grid gap-4 grid-cols-2 lg:grid-cols-3"
         >
           <motion.div
             layout
             variants={item}
-            className="w-full flex items-center gap-4 flex-col h-full border rounded-lg aspect-video overflow-hidden"
+            className="w-full flex items-center gap-4 flex-col h-full md:h-auto border rounded-xl md:aspect-video overflow-hidden"
           >
             <video
               ref={localVideoRef}
@@ -235,8 +237,8 @@ const Room = () => {
             layout
             variants={item}
             className={cn([
-              "w-full flex items-center gap-4 flex-col h-full border rounded-lg aspect-video overflow-hidden",
-              // !isPeerConnected && "hidden",
+              "w-full flex items-center gap-4 flex-col h-full border rounded-xl md:aspect-video overflow-hidden",
+              !isPeerConnected && "hidden",
             ])}
           >
             <video
