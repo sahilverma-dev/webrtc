@@ -2,6 +2,10 @@
 
 Welcome to my WebRTC project repository! Here, I'll be experimenting with WebRTC and implementing various features to learn more about real-time communication over the web.
 
+## Live Preview
+
+[https://webrtc-sahilverma.netlify.app/](https://webrtc-sahilverma.netlify.app/)
+
 ## Table of Contents
 
 - [Introduction](#introduction)
@@ -22,7 +26,7 @@ In this project, I'll explore different aspects of WebRTC, including:
 
 ## Todo
 
-- [ ] Custom TURN server
+- [x] Custom TURN server
 - [ ] File transfer
 - [ ] Group video chat with SFU
 
@@ -69,6 +73,10 @@ In this project, I'll explore different aspects of WebRTC, including:
    ```
 
    You may now access the application at the specified address in your browser.
+
+4. **Setup TURN server (optional)**
+   This step us only required if you're planning to host the project.
+   Read this to [setup your custom TURN Server](./setup-custom-turn-server.md).
 
 ## Contact Me
 
